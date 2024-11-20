@@ -4,7 +4,17 @@ import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+from streamlit_option_menu import option_menu
 import re
+import requests
+from bs4 import BeautifulSoup
+
+st.set_page_config(
+    page_title="YouTube Video Summarizer",
+    page_icon="📺",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 def load_environment():
     """Load environment variables"""
@@ -282,8 +292,70 @@ def summarize_with_langchain_and_openai(transcript, language_code, model_name='l
         st.error(f"Error with Groq API during final summarization: {str(e)}")
         return None
 
+def get_chat_list():
+    current_dir = os.path.dirname(__file__) + '/chats/'
+    chat_files = [file.replace('.txt', '') for file in os.listdir(current_dir) if file.endswith('.txt')]
+    return chat_files
+
+def display_chat(file_name):
+    try:
+        chat_dir = os.path.dirname(__file__) + "/chats/"
+        file_path = os.path.join(chat_dir, f"{file_name}.txt")
+        
+        with open(file_path, "r") as file:
+            content = file.read()
+            st.header(f"{file_name.capitalize()} Chat")
+            st.markdown(content)
+    except FileNotFoundError:
+        st.error(f"The chat file '{file_name}.txt' does not exist.")
+
+def get_youtube_title(video_url):
+    """
+    Fetches the title of a YouTube video using requests and BeautifulSoup.
+
+    :param video_url: The URL of the YouTube video.
+    :return: The title of the video.
+    """
+    try:
+        # Send a GET request to the YouTube video URL
+        response = requests.get(video_url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        # Parse the HTML content
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Find the title tag
+        title_tag = soup.find('title')
+        if title_tag:
+            # Remove the "- YouTube" suffix from the title
+            return title_tag.text.replace('- YouTube', '').strip()
+        else:
+            return "Title tag not found in the HTML content."
+    except Exception as e:
+        return f"Error fetching video title: {str(e)}"
+    
+def ensure_chats_folder():
+    """
+    Checks if the 'chats' folder exists in the current directory.
+    If not, creates it.
+    """
+    chats_folder = os.path.join(os.path.dirname(__file__), "chats")
+    if not os.path.exists(chats_folder):
+        os.makedirs(chats_folder)
+        print(f"Folder created: {chats_folder}")
+    else:
+        print(f"Folder already exists: {chats_folder}")
+
 def main():
-    st.title('📺 Advanced YouTube Video Summarizer')
+    ensure_chats_folder()
+
+    chat_list = get_chat_list()
+    chat_list.insert(0, 'New Chat')
+    with st.sidebar:
+        selected = option_menu("Chat History", chat_list, 
+            icons= ['plus'] + ['chat'] * len(chat_list), menu_icon="")
+
+    st.title('📺 YouTube Video Summarizer')
     st.markdown("""
     This tool creates comprehensive summaries of YouTube videos using advanced AI technology.
     It works with both videos that have transcripts and those that don't!
@@ -297,7 +369,7 @@ def main():
     with col2:
         languages = get_available_languages()
         target_language = st.selectbox(
-            '🌍 Select Summary Language:',
+            '🌍 Select Language:',
             options=list(languages.keys()),
             index=0
         )
@@ -335,11 +407,19 @@ def main():
 
                     status_text.text('✨ Summary Ready!')
                     st.markdown(summary)
+                    chat_title = get_youtube_title(link) + ".txt"
+                    chats = os.path.dirname(__file__) + '/chats/' + chat_title
+                    with open(chats, "x", encoding="utf-8") as file:
+                        file.write(summary)
                     progress.progress(100)
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
         else:
             st.warning('Please enter a valid YouTube link.')
+    if selected == "New Chat":
+        pass
+    else:
+        display_chat(selected)
 
 if __name__ == "__main__":
     main()
