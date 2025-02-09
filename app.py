@@ -8,6 +8,7 @@ from streamlit_option_menu import option_menu
 import re
 import requests
 from bs4 import BeautifulSoup
+import update_cookies
 
 st.set_page_config(
     page_title="YouTube Video Summarizer",
@@ -67,8 +68,8 @@ def get_transcript(youtube_url):
         cookies_file = os.getenv('COOKIE_PATH', os.path.join(os.path.dirname(__file__), 'cookies.txt'))
         
         if not os.path.exists(cookies_file):
-            st.error("Cookie file not found. Please follow the setup instructions in the README.")
-            return None, None
+            st.error("Cookie file not found. Generating one for you, please wait a while...")
+            update_cookies.get_youtube_cookies()
             
         try:
             # Read cookies from file
@@ -343,8 +344,6 @@ def ensure_chats_folder():
     if not os.path.exists(chats_folder):
         os.makedirs(chats_folder)
         print(f"Folder created: {chats_folder}")
-    else:
-        print(f"Folder already exists: {chats_folder}")
 
 def main():
     ensure_chats_folder()
@@ -411,6 +410,8 @@ def main():
                     chats = os.path.dirname(__file__) + '/chats/' + chat_title
                     with open(chats, "x", encoding="utf-8") as file:
                         file.write(summary)
+                    get_chat_list()
+                    st.rerun() 
                     progress.progress(100)
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")

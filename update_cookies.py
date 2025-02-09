@@ -11,18 +11,18 @@ import sys
 from selenium.webdriver.common.keys import Keys
 
 def wait_and_find_element(driver, selectors, timeout=20):
-    """Versucht mehrere Selektoren nacheinander"""
+    """Attempts multiple selectors in sequence"""
     for by, selector in selectors:
         try:
             element = WebDriverWait(driver, timeout).until(
                 EC.element_to_be_clickable((by, selector))
             )
-            print(f"Element gefunden: {selector}")
+            print(f"Element found: {selector}")
             return element
         except Exception as e:
-            print(f"Selector {selector} nicht gefunden, versuche nächsten...")
+            print(f"Selector {selector} not found, trying next...")
             continue
-    raise Exception("Kein Element mit den gegebenen Selektoren gefunden")
+    raise Exception("No element found with the given selectors")
 
 def get_youtube_cookies():
     try:
@@ -32,7 +32,7 @@ def get_youtube_cookies():
         email = os.getenv('YOUTUBE_EMAIL')
         password = os.getenv('YOUTUBE_PASSWORD')
         
-        print(f"Verwende Email: {email}")
+        print(f"Using email: {email}")
         
         chrome_options = Options()
         chrome_options.add_argument('--headless=new')
@@ -62,13 +62,13 @@ def get_youtube_cookies():
         })
         
         try:
-            # Gehe zur Google Login Seite
-            print("Navigiere zur Login-Seite...")
+            # Navigate to Google login page
+            print("Navigating to login page...")
             driver.get('https://accounts.google.com/signin/v2/identifier?hl=en&flowName=GlifWebSignIn')
             time.sleep(3)
             
-            # Email eingeben
-            print("Email eingeben...")
+            # Enter email
+            print("Entering email...")
             email_selectors = [
                 (By.ID, "identifierId"),
                 (By.NAME, "identifier"),
@@ -81,8 +81,8 @@ def get_youtube_cookies():
             email_field.send_keys(Keys.RETURN)
             time.sleep(5)
             
-            # Passwort eingeben
-            print("Passwort eingeben...")
+            # Enter password
+            print("Entering password...")
             password_selectors = [
                 (By.NAME, "password"),
                 (By.NAME, "Passwd"),
@@ -96,9 +96,9 @@ def get_youtube_cookies():
                 (By.CSS_SELECTOR, "#password input")
             ]
             
-            # Warte und prüfe, ob wir auf der Passwort-Seite sind
+            # Wait and check if we are on the password page
             time.sleep(2)
-            print(f"Aktuelle URL: {driver.current_url}")
+            print(f"Current URL: {driver.current_url}")
             
             password_field = wait_and_find_element(driver, password_selectors)
             password_field.clear()
@@ -106,32 +106,28 @@ def get_youtube_cookies():
             password_field.send_keys(Keys.RETURN)
             time.sleep(5)
             
-            # Navigiere zum spezifischen Video
-            print("Navigiere zum Video...")
+            # Navigate to the specific video
+            print("Navigating to the video...")
             driver.get('https://www.youtube.com/watch?v=fr0uRT9mW5k')
-            time.sleep(5)  # Warte auf Video-Ladung
+            time.sleep(5)  # Wait for video to load
             
-            # Optional: Warte auf Video-Player
+            # Optional: Wait for video player
             try:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "movie_player"))
                 )
-                print("Video-Player gefunden")
+                print("Video player found")
             except:
-                print("Video-Player nicht gefunden, fahre trotzdem fort")
+                print("Video player not found, proceeding anyway")
             
-            # Cookies speichern
+            # Save cookies
             cookies = driver.get_cookies()
             if not cookies:
-                raise Exception("Keine Cookies gefunden")
+                raise Exception("No cookies found")
             
-            print(f"Gefundene Cookies: {len(cookies)}")
+            print(f"Cookies found: {len(cookies)}")
             
             cookies_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
-            backup_path = cookies_path + '.backup'
-            
-            if os.path.exists(cookies_path):
-                os.replace(cookies_path, backup_path)
             
             with open(cookies_path, 'w') as f:
                 f.write("# Netscape HTTP Cookie File\n")
@@ -150,22 +146,22 @@ def get_youtube_cookies():
                     
                     f.write(f"{domain}\tTRUE\t{path}\t{secure}\t{expires}\t{name}\t{value}\n")
             
-            print(f"Cookies erfolgreich gespeichert: {datetime.now()}")
+            print(f"Cookies successfully saved: {datetime.now()}")
             return True
             
         finally:
-            print("Browser wird geschlossen...")
+            print("Closing browser...")
             driver.quit()
             
     except Exception as e:
-        print(f"Fehler beim Cookie-Export: {str(e)}")
+        print(f"Error during cookie export: {str(e)}")
         print("Stack Trace:", file=sys.stderr)
         import traceback
         traceback.print_exc()
         
         if 'backup_path' in locals() and os.path.exists(backup_path):
             os.replace(backup_path, cookies_path)
-            print("Backup wiederhergestellt")
+            print("Backup restored")
         return False
 
 if __name__ == "__main__":
