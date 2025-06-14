@@ -1,6 +1,7 @@
 streamlit
 streamlit_option_menu
 openai>=1.0.0
+bs4
 youtube_transcript_api
 langchain
 python-dotenv
