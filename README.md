@@ -24,7 +24,7 @@ Before you begin, ensure you have installed:
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/DevRico003/youtube_summarizerhttps://github.com/daksh-xyz/YTVideoSummarizer.git
+git clone https://github.com/daksh-xyz/YTVideoSummarizer.git
 ```
 
 2. Change into the project directory:
