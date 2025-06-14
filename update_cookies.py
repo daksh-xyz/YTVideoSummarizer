@@ -127,7 +127,7 @@ def get_youtube_cookies():
             
             print(f"Cookies found: {len(cookies)}")
             
-            cookies_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+            cookies_path = os.path.join('./cookies.txt')
             
             with open(cookies_path, 'w') as f:
                 f.write("# Netscape HTTP Cookie File\n")
