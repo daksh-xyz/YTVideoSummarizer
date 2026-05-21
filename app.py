@@ -87,7 +87,7 @@ class YouTubeSummarizer:
         """Get transcript from YouTube video in preferred language"""
         try:
             video_id = self.extract_video_id(youtube_url)
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            transcript_list = YouTubeTranscriptApi.get_transcripts(video_id)
             
             # Get available transcripts info for user feedback
             available_languages = []
@@ -175,7 +175,7 @@ class YouTubeSummarizer:
         """Get list of available transcripts for a video"""
         try:
             video_id = self.extract_video_id(youtube_url)
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            transcript_list = YouTubeTranscriptApi.get_transcripts(video_id)
             
             transcripts_info = []
             for transcript in transcript_list:
