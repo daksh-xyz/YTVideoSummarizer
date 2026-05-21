@@ -147,25 +147,22 @@ class YouTubeSummarizer:
             # Fetch transcript content
             try:
                 transcript_parts = selected_transcript.fetch()
+
                 if not transcript_parts:
                     st.error("No transcript content found.")
                     return None, None
-                    
-                # Extract text from transcript parts
-                full_transcript = " ".join([
-                    part.get('text', '') if isinstance(part, dict) else getattr(part, 'text', '')
-                    for part in transcript_parts
-                ])
-                
+
+                full_transcript = " ".join([part.text for part in transcript_parts])
+
                 if not full_transcript.strip():
                     st.error("Transcript content is empty.")
                     return None, None
-                    
+
                 return full_transcript, selected_transcript.language_code
-                
-            except Exception as e:
-                st.error(f"Error fetching transcript content: {str(e)}")
-                return None, None
+
+                except Exception as e:
+                    st.error(f"Error fetching transcript content: {repr(e)}")
+                    return None, None
                 
         except (NoTranscriptFound, TranscriptsDisabled):
             st.error("Could not fetch transcript. The video might be private, age-restricted, or not have captions available.")
