@@ -31,7 +31,7 @@ st.set_page_config(
 CHATS_DIR = Path("./chats")
 ENV_FILE = ".env"
 
-DEFAULT_MODEL = "llama-3.1-8b-instant"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 CHUNK_SIZE = 2500
 CHUNK_OVERLAP = 200
@@ -226,7 +226,7 @@ class YouTubeSummarizer:
                         {
                             "role": "system",
                             "content": f"""
-                            You are an expert YouTube video summarizer.
+                            You are an expert YouTube video summarizer. Use proper headings and don't say "here's your summary" or anything like that just provide the summary.
                             Create a structured and detailed summary in {language_code}.
                             """
                         },
@@ -264,7 +264,7 @@ class YouTubeSummarizer:
                         {
                             "role": "system",
                             "content": f"""
-                            You are an expert summarizer.
+                            You are an expert summarizer. Use proper headings and don't say "here's your summary" or anything like that just provide the summary.
                             Summarize this section in {language_code}.
                             """
                         },
