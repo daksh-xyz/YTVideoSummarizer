@@ -6,7 +6,7 @@ This is a Python application that creates comprehensive summaries of YouTube vid
 - Automatic transcript extraction from YouTube videos
 - Fallback to audio transcription using Groq's Whisper Large V3 Turbo
 - Advanced text chunking with Langchain
-- Comprehensive summarization using Llama 3.1 8B Instant
+- Comprehensive summarization using Llama-3.3 70b versatile model
 - Multi-language support with 12+ languages
 - Language selection for summaries
 - Structured summaries with clear sections
