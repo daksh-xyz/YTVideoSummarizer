@@ -38,18 +38,56 @@ MAX_TOKENS = 1024
 _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
-# ── Sidebar style ─────────────────────────────────────────────────────────────
+# ── Sidebar styles ────────────────────────────────────────────────────────────
 
-# Truncate long chat names in the sidebar menu with an ellipsis.
 st.markdown(
     """
     <style>
-    [data-testid="stSidebar"] .nav-link span {
-        display: block;
+    /* ── Chat row buttons ── */
+
+    /* The chat-name button: left-aligned, full width, no background */
+    [data-testid="stSidebar"] button[data-chat-name] {
+        background: none;
+        border: none;
+        text-align: left;
+        padding: 0.35rem 0.5rem;
+        width: 100%;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 170px;
+        border-radius: 6px;
+        transition: background 0.15s;
+    }
+    [data-testid="stSidebar"] button[data-chat-name]:hover {
+        background: rgba(255,255,255,0.07);
+    }
+
+    /* The ⋮ button: compact, no background */
+    [data-testid="stSidebar"] button[data-dots] {
+        background: none;
+        border: none;
+        padding: 0.2rem 0.4rem;
+        border-radius: 6px;
+        font-size: 1.1rem;
+        line-height: 1;
+        transition: background 0.15s;
+    }
+    [data-testid="stSidebar"] button[data-dots]:hover {
+        background: rgba(255,255,255,0.1);
+    }
+
+    /* Highlighted (selected) chat row */
+    [data-testid="stSidebar"] div[data-selected-row] button[data-chat-name] {
+        background: rgba(255,255,255,0.12);
+        font-weight: 600;
+    }
+
+    /* Rename / delete action buttons inside the inline panel */
+    [data-testid="stSidebar"] button[data-action="rename"],
+    [data-testid="stSidebar"] button[data-action="delete"] {
+        border-radius: 5px;
+        font-size: 0.82rem;
+        padding: 0.25rem 0.6rem;
     }
     </style>
     """,
@@ -80,6 +118,10 @@ def _unique_path(stem: str) -> Path:
         if not candidate.exists():
             return candidate
         counter += 1
+
+
+def _display_name(stem: str) -> str:
+    return stem.replace("_", " ").title()
 
 
 # ── Main class ────────────────────────────────────────────────────────────────
@@ -195,7 +237,7 @@ class YouTubeSummarizer:
             "Русский": "ru",
         }
 
-    # ── Summarisation prompts ──────────────────────────────────────────────
+    # ── Prompts ────────────────────────────────────────────────────────────
 
     @staticmethod
     def _system_prompt(language_code: str, role: str = "full") -> str:
@@ -332,13 +374,12 @@ purpose, topic, and intended audience.
         return "Untitled Video"
 
     def save_chat(self, content: str, video_url: str) -> Optional[str]:
-        """Save summary to disk. Returns the file stem on success, None on failure."""
         try:
             raw_title = self.get_youtube_title(video_url)
             stem = _make_safe_stem(raw_title)
             file_path = _unique_path(stem)
             file_path.write_text(content, encoding="utf-8")
-            return file_path.stem   # caller handles UI feedback
+            return file_path.stem
         except Exception as e:
             st.error(f"Error saving chat: {e}")
             return None
@@ -354,8 +395,7 @@ purpose, topic, and intended audience.
         file_path = CHATS_DIR / f"{file_stem}.txt"
         try:
             content = file_path.read_text(encoding="utf-8")
-            display_title = file_stem.replace("_", " ").title()
-            st.header(display_title)
+            st.header(_display_name(file_stem))
             st.markdown(content)
         except FileNotFoundError:
             st.error("Chat file not found.")
@@ -364,21 +404,16 @@ purpose, topic, and intended audience.
 
     @staticmethod
     def rename_chat(old_stem: str, new_name: str) -> Optional[str]:
-        """
-        Rename a chat file. Returns the new stem on success, None on failure.
-        Handles collisions with _unique_path.
-        """
         new_stem = _make_safe_stem(new_name)
         if not new_stem:
             st.error("Please enter a valid name.")
             return None
+        if new_stem == old_stem:
+            return old_stem
         old_path = CHATS_DIR / f"{old_stem}.txt"
         if not old_path.exists():
             st.error("Original file not found.")
             return None
-        # Avoid unnecessary rename if names are the same
-        if new_stem == old_stem:
-            return old_stem
         new_path = _unique_path(new_stem)
         try:
             old_path.rename(new_path)
@@ -389,10 +424,8 @@ purpose, topic, and intended audience.
 
     @staticmethod
     def delete_chat(stem: str) -> bool:
-        """Delete a chat file. Returns True on success."""
-        file_path = CHATS_DIR / f"{stem}.txt"
         try:
-            file_path.unlink(missing_ok=True)
+            (CHATS_DIR / f"{stem}.txt").unlink(missing_ok=True)
             return True
         except Exception as e:
             st.error(f"Error deleting chat: {e}")
@@ -415,117 +448,190 @@ def update_env() -> None:
                 if api:
                     Path(ENV_FILE).touch()
                     set_key(ENV_FILE, "GROQ_API_KEY", api)
-                    os.environ["GROQ_API_KEY"] = api   # apply immediately, no restart needed
+                    os.environ["GROQ_API_KEY"] = api
                     st.success("Credentials saved.")
                     st.session_state.show_form = False
                 else:
                     st.error("Please enter a non-empty API key.")
 
 
-# ── Chat management sidebar panel ─────────────────────────────────────────────
+# ── Sidebar chat list ─────────────────────────────────────────────────────────
 
-def render_chat_actions(summarizer: "YouTubeSummarizer", stem: str) -> None:
-    """Render rename and delete controls in the sidebar for the selected chat."""
-    st.sidebar.markdown("---")
+def render_sidebar(summarizer: "YouTubeSummarizer") -> str:
+    """
+    Render the full sidebar and return the currently selected chat stem,
+    or "New Chat".
 
-    # ── Rename ──────────────────────────────────────────────────────────────
-    with st.sidebar.expander("✏️ Rename"):
-        display_name = stem.replace("_", " ").title()
-        new_name = st.text_input(
-            "New name",
-            value=display_name,
-            key="rename_input",
-            label_visibility="collapsed",
-        )
-        if st.button("Rename", key="rename_btn", use_container_width=True):
-            new_stem = summarizer.rename_chat(stem, new_name)
-            if new_stem:
-                st.session_state.selected_chat = new_stem
-                st.rerun()
+    Each chat row has:
+      [chat name button (fills width)]  [⋮ button]
 
-    # ── Delete ──────────────────────────────────────────────────────────────
-    with st.sidebar.expander("🗑️ Delete"):
-        st.warning(f'Delete **"{stem.replace("_", " ").title()}"**? This cannot be undone.')
-        if st.button("Delete", key="delete_btn", type="primary", use_container_width=True):
-            if summarizer.delete_chat(stem):
-                st.session_state.selected_chat = None
-                st.rerun()
+    Clicking ⋮ toggles an inline panel beneath that row with Rename and Delete.
+    """
+    # Session-state keys used here
+    # selected_chat : str | None   — current open chat stem (None = New Chat)
+    # dots_open     : str | None   — stem whose ⋮ menu is expanded
+    # rename_mode   : str | None   — stem currently being renamed
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-def main() -> None:
-    summarizer = YouTubeSummarizer()
-
-    # selected_chat persists across reruns so a newly saved chat is shown immediately
-    if "selected_chat" not in st.session_state:
-        st.session_state.selected_chat = None
+    ss = st.session_state
+    ss.setdefault("selected_chat", None)
+    ss.setdefault("dots_open", None)
+    ss.setdefault("rename_mode", None)
 
     chat_list = summarizer.get_chat_list()
-    chat_options = ["New Chat"] + chat_list
-
-    # Determine the default index for option_menu based on session state
-    if st.session_state.selected_chat and st.session_state.selected_chat in chat_list:
-        default_idx = chat_options.index(st.session_state.selected_chat)
-    else:
-        default_idx = 0
 
     with st.sidebar:
-        selected = option_menu(
-            "Chat History",
-            chat_options,
-            icons=["plus"] + ["chat-text"] * len(chat_list),
-            menu_icon="collection",
-            default_index=default_idx,
-            key="sidebar_menu",
-        )
+        st.markdown("## 📺 Chats")
 
-    # Keep session state in sync with whatever the user clicked
-    st.session_state.selected_chat = selected if selected != "New Chat" else None
+        # ── New Chat button ────────────────────────────────────────────────
+        if st.button("＋  New Chat", use_container_width=True, key="btn_new_chat"):
+            ss.selected_chat = None
+            ss.dots_open = None
+            ss.rename_mode = None
 
+        st.markdown("---")
+
+        # ── One row per saved chat ─────────────────────────────────────────
+        for stem in chat_list:
+            is_selected = ss.selected_chat == stem
+            is_dots_open = ss.dots_open == stem
+            is_renaming = ss.rename_mode == stem
+
+            # Highlight selected row with a subtle background
+            row_style = (
+                "background:rgba(255,255,255,0.10);border-radius:8px;padding:2px 0;"
+                if is_selected
+                else "border-radius:8px;padding:2px 0;"
+            )
+            with st.container():
+                st.markdown(f'<div style="{row_style}">', unsafe_allow_html=True)
+                col_name, col_dots = st.columns([11, 1])
+
+                # Chat name button
+                label = _display_name(stem)
+                # Truncate display label so it never wraps
+                short_label = label if len(label) <= 22 else label[:20] + "…"
+                with col_name:
+                    if st.button(
+                        short_label,
+                        key=f"chat_btn_{stem}",
+                        use_container_width=True,
+                        help=label,           # full name on hover
+                    ):
+                        ss.selected_chat = stem
+                        ss.dots_open = None
+                        ss.rename_mode = None
+
+                # ⋮ button
+                with col_dots:
+                    if st.button("⋮", key=f"dots_{stem}", help="Rename or delete"):
+                        ss.dots_open = stem if not is_dots_open else None
+                        ss.rename_mode = None   # close any open rename input
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            # ── Inline action panel (shown below the row when ⋮ is open) ──
+            if is_dots_open:
+                with st.container():
+                    st.markdown(
+                        '<div style="margin-left:8px;margin-bottom:6px;">',
+                        unsafe_allow_html=True,
+                    )
+
+                    action_col1, action_col2 = st.columns(2)
+
+                    with action_col1:
+                        if st.button(
+                            "✏️ Rename",
+                            key=f"action_rename_{stem}",
+                            use_container_width=True,
+                        ):
+                            ss.rename_mode = stem if not is_renaming else None
+
+                    with action_col2:
+                        if st.button(
+                            "🗑️ Delete",
+                            key=f"action_delete_{stem}",
+                            use_container_width=True,
+                            type="primary",
+                        ):
+                            summarizer.delete_chat(stem)
+                            if ss.selected_chat == stem:
+                                ss.selected_chat = None
+                            ss.dots_open = None
+                            ss.rename_mode = None
+                            st.rerun()
+ 
+                    # Rename input (only when rename was clicked)
+                    if is_renaming:
+                        new_name = st.text_input(
+                            "New name",
+                            value=_display_name(stem),
+                            key=f"rename_input_{stem}",
+                            label_visibility="collapsed",
+                        )
+                        if st.button(
+                            "Save name",
+                            key=f"rename_save_{stem}",
+                            use_container_width=True,
+                        ):
+                            new_stem = summarizer.rename_chat(stem, new_name)
+                            if new_stem:
+                                if ss.selected_chat == stem:
+                                    ss.selected_chat = new_stem
+                                ss.dots_open = None
+                                ss.rename_mode = None
+                                st.rerun()
+ 
+                    st.markdown("</div>", unsafe_allow_html=True)
+ 
+    return ss.selected_chat if ss.selected_chat else "New Chat"
+    # ── Main ──────────────────────────────────────────────────────────────────────
+ 
+def main() -> None:
+    summarizer = YouTubeSummarizer()
+ 
+    selected = render_sidebar(summarizer)
+ 
     # ── Viewing an existing chat ───────────────────────────────────────────
     if selected != "New Chat":
         summarizer.display_chat(selected)
-        render_chat_actions(summarizer, selected)
         return
-
+ 
     # ── New chat page ──────────────────────────────────────────────────────
     st.title("📺 YouTube Video Summarizer")
     st.markdown("Summarise any YouTube video using AI — paste a URL and go.")
-
+ 
     update_env()
-
+ 
     youtube_url = st.text_input("YouTube video URL")
-
+ 
     languages = summarizer.get_available_languages()
+    
     selected_language = st.selectbox(
         "Transcript language",
         options=list(languages.keys()),
     )
-
+ 
     if st.button("Generate Summary", type="primary", use_container_width=True):
         if not youtube_url.strip():
             st.warning("Please enter a YouTube URL.")
             return
-
+ 
         with st.spinner("Fetching transcript…"):
             transcript, language_code = summarizer.get_transcript(
                 youtube_url, languages[selected_language]
             )
-
+ 
         if transcript:
             with st.spinner("Generating summary…"):
                 summary = summarizer.summarize_content(transcript, language_code)
-
-            if summary:
+                if summary:
                 st.markdown(summary)
-
                 saved_stem = summarizer.save_chat(summary, youtube_url)
                 if saved_stem:
-                    # Switch to the new chat so it appears selected in the sidebar
                     st.session_state.selected_chat = saved_stem
                     st.rerun()
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
