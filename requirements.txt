@@ -4,6 +4,7 @@ openai>=1.0.0
 bs4
 youtube_transcript_api
 langchain
+langchain-text-splitters
 python-dotenv
 yt-dlp
 requests>=2.31.0
