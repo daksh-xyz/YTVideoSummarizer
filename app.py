@@ -7,6 +7,7 @@ from typing import Optional, Tuple, Dict, List
 import streamlit as st
 from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
+from youtube_transcript_api._errors import VideoUnavailable
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv, set_key
 from streamlit_option_menu import option_menu
@@ -119,10 +120,12 @@ class YouTubeSummarizer:
             # Strategy 3: Try to get any manually created transcript
             if not selected_transcript:
                 try:
-                    selected_transcript = transcript_list.find_manually_created_transcript()
-                    st.warning(f"Using manually created transcript in: {selected_transcript.language_code}")
-                except:
-                    pass
+                    manual_transcripts = [t for t in transcript_list if not t.is_generated]
+                    if manual_transcripts:
+                        selected_transcript = manual_transcripts[0]
+                        st.warning(f"Using manually created transcript in: {selected_transcript.language_code}")
+                except VideoUnavailable:
+                    st.error("Video unavailable.") 
             
             # Strategy 4: Get any available transcript (including auto-generated)
             if not selected_transcript:
