@@ -7,7 +7,7 @@ from typing import Optional, Tuple, Dict, List
 import streamlit as st
 from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv, set_key
 from streamlit_option_menu import option_menu
 from bs4 import BeautifulSoup
