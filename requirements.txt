@@ -2,7 +2,7 @@ streamlit
 streamlit_option_menu
 openai>=1.0.0
 bs4
-youtube-transcript-api==0.6.2
+youtube-transcript-api
 langchain
 langchain-text-splitters
 python-dotenv
