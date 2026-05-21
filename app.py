@@ -626,8 +626,8 @@ def main() -> None:
             with st.spinner("Generating summary…"):
                 summary = summarizer.summarize_content(transcript, language_code)
                 if summary:
-                st.markdown(summary)
-                saved_stem = summarizer.save_chat(summary, youtube_url)
+                    st.markdown(summary)
+                    saved_stem = summarizer.save_chat(summary, youtube_url)
                 if saved_stem:
                     st.session_state.selected_chat = saved_stem
                     st.rerun()
