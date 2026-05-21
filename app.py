@@ -160,9 +160,9 @@ class YouTubeSummarizer:
 
                 return full_transcript, selected_transcript.language_code
 
-                except Exception as e:
-                    st.error(f"Error fetching transcript content: {repr(e)}")
-                    return None, None
+        except Exception as e:
+            st.error(f"Error fetching transcript content: {repr(e)}")
+            return None, None
                 
         except (NoTranscriptFound, TranscriptsDisabled):
             st.error("Could not fetch transcript. The video might be private, age-restricted, or not have captions available.")
