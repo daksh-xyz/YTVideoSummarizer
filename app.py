@@ -226,7 +226,7 @@ class YouTubeSummarizer:
                         {
                             "role": "system",
                             "content": f"""
-                            You are an expert YouTube video summarizer. Use proper headings and don't say "here's your summary" or anything like that just provide the summary.
+                            You are an expert YouTube video summarizer. Use proper headings and don't say "here's your summary", and don't mention anything about transcripts or anything like that just provide the summary for the video.
                             Create a structured and detailed summary in {language_code}.
                             """
                         },
@@ -264,7 +264,7 @@ class YouTubeSummarizer:
                         {
                             "role": "system",
                             "content": f"""
-                            You are an expert summarizer. Use proper headings and don't say "here's your summary" or anything like that just provide the summary.
+                            You are an expert summarizer. Use proper headings and don't say "here's your summary", and don't mention anything about transcripts or anything like that just provide the summary for the video.
                             Summarize this section in {language_code}.
                             """
                         },
