@@ -33,9 +33,9 @@ ENV_FILE = ".env"
 
 DEFAULT_MODEL = "llama-3.1-8b-instant"
 
-CHUNK_SIZE = 7000
-CHUNK_OVERLAP = 1000
-MAX_TOKENS = 8000
+CHUNK_SIZE = 2500
+CHUNK_OVERLAP = 200
+MAX_TOKENS = 1024
 
 
 # ---------------- MAIN CLASS ---------------- #
