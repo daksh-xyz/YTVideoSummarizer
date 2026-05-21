@@ -30,52 +30,47 @@ st.set_page_config(
 
 CHATS_DIR = Path("./chats")
 ENV_FILE = ".env"
-
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
-
 CHUNK_SIZE = 2500
 CHUNK_OVERLAP = 200
 MAX_TOKENS = 1024
 
-# Characters that are illegal in filenames on Windows / Linux / macOS
 _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+# ── Sidebar style ─────────────────────────────────────────────────────────────
+
+# Truncate long chat names in the sidebar menu with an ellipsis.
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] .nav-link span {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 170px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ── Filename helpers ──────────────────────────────────────────────────────────
 
 def _make_safe_stem(title: str, max_len: int = 100) -> str:
-    """
-    Convert an arbitrary video title into a filesystem-safe filename *stem*
-    (no extension).
-
-    Steps
-    -----
-    1. Strip surrounding whitespace.
-    2. Replace unsafe / illegal characters with underscores.
-    3. Collapse consecutive underscores / spaces into one underscore.
-    4. Strip leading / trailing dots and underscores.
-    5. Remove any trailing extension the title may already contain
-       (.txt, .mp4, …) — this is the root cause of the ".txt" chat-name bug:
-       a title like "My Video.txt" would be saved as "My Video.txt.txt",
-       whose stem is "My Video.txt", showing up in the sidebar as ".txt".
-    6. Fall back to "Untitled_Video" if nothing is left.
-    7. Truncate to max_len characters.
-    """
     stem = title.strip()
     stem = _UNSAFE_CHARS.sub("_", stem)
-    stem = re.sub(r"[\s_]+", "_", stem)       # collapse whitespace / underscores
-    stem = stem.strip("._")                    # no leading / trailing dots or underscores
-    stem = re.sub(r"\.[a-zA-Z0-9]{1,5}$", "", stem)  # strip embedded extension
-    stem = stem.strip("._")                    # clean up again
+    stem = re.sub(r"[\s_]+", "_", stem)
+    stem = stem.strip("._")
+    stem = re.sub(r"\.[a-zA-Z0-9]{1,5}$", "", stem)
+    stem = stem.strip("._")
     stem = stem or "Untitled_Video"
     return stem[:max_len]
 
 
 def _unique_path(stem: str) -> Path:
-    """
-    Return a Path inside CHATS_DIR that does not yet exist.
-    Appends _2, _3, … (starting at 2, not 1) to keep names readable.
-    """
     candidate = CHATS_DIR / f"{stem}.txt"
     if not candidate.exists():
         return candidate
@@ -155,15 +150,12 @@ class YouTubeSummarizer:
             if not fetched:
                 st.error("No transcript found for this video.")
                 return None, None
-
             full_text = " ".join(snippet.text for snippet in fetched).strip()
             if not full_text:
                 st.error("Transcript appears to be empty.")
                 return None, None
-
             st.success(f"Transcript fetched in: {fetched.language}")
             return full_text, fetched.language_code
-
         except (NoTranscriptFound, TranscriptsDisabled):
             st.error("No captions are available for this video.")
             return None, None
@@ -207,19 +199,11 @@ class YouTubeSummarizer:
 
     @staticmethod
     def _system_prompt(language_code: str, role: str = "full") -> str:
-        """
-        Return a focused system prompt for the given summarisation role.
-
-        role="full"   – single-pass summary of the entire transcript
-        role="chunk"  – map step: summarise one section
-        role="reduce" – reduce step: synthesise intermediate summaries
-        """
         lang_instruction = (
             f"Write your entire response in the language with ISO code '{language_code}'."
             if language_code != "en"
             else "Write your entire response in English."
         )
-
         if role == "chunk":
             return f"""\
 You are a precise summariser working on one section of a YouTube video transcript.
@@ -233,7 +217,6 @@ Rules:
 - Never mention transcripts, captions, or the summarisation process.
 
 {lang_instruction}"""
-
         if role == "reduce":
             return f"""\
 You are a senior editor merging several section-level summaries of a YouTube video \
@@ -248,8 +231,6 @@ Rules:
 - Never write meta-commentary or reference the summarisation process.
 
 {lang_instruction}"""
-
-        # role == "full"
         return f"""\
 You are an expert at turning YouTube videos into clear, well-structured written summaries.
 
@@ -273,7 +254,6 @@ purpose, topic, and intended audience.
         language_code: str,
         model_name: str = DEFAULT_MODEL,
     ) -> Optional[str]:
-
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP,
@@ -281,7 +261,6 @@ purpose, topic, and intended audience.
         )
         chunks = splitter.split_text(transcript)
 
-        # ── Short transcript: single-pass ──────────────────────────────────
         if len(chunks) == 1:
             try:
                 resp = self.groq_client.chat.completions.create(
@@ -298,10 +277,8 @@ purpose, topic, and intended audience.
                 st.error(f"Groq API error: {e}")
                 return None
 
-        # ── Long transcript: map-reduce ────────────────────────────────────
         intermediate: List[str] = []
         progress = st.progress(0.0, text="Summarising sections…")
-
         for i, chunk in enumerate(chunks):
             try:
                 resp = self.groq_client.chat.completions.create(
@@ -321,12 +298,9 @@ purpose, topic, and intended audience.
             except Exception as e:
                 st.error(f"Error summarising section {i + 1}: {e}")
                 return None
-
         progress.empty()
 
-        # Separate sections clearly so the reduce model can distinguish them
         combined = "\n\n---\n\n".join(intermediate)
-
         try:
             final_resp = self.groq_client.chat.completions.create(
                 model=model_name,
@@ -357,17 +331,17 @@ purpose, topic, and intended audience.
             pass
         return "Untitled Video"
 
-    def save_chat(self, content: str, video_url: str) -> bool:
+    def save_chat(self, content: str, video_url: str) -> Optional[str]:
+        """Save summary to disk. Returns the file stem on success, None on failure."""
         try:
             raw_title = self.get_youtube_title(video_url)
             stem = _make_safe_stem(raw_title)
             file_path = _unique_path(stem)
             file_path.write_text(content, encoding="utf-8")
-            st.success(f"Saved: {file_path.name}")
-            return True
+            return file_path.stem   # caller handles UI feedback
         except Exception as e:
             st.error(f"Error saving chat: {e}")
-            return False
+            return None
 
     @staticmethod
     def get_chat_list() -> List[str]:
@@ -388,6 +362,42 @@ purpose, topic, and intended audience.
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
+    @staticmethod
+    def rename_chat(old_stem: str, new_name: str) -> Optional[str]:
+        """
+        Rename a chat file. Returns the new stem on success, None on failure.
+        Handles collisions with _unique_path.
+        """
+        new_stem = _make_safe_stem(new_name)
+        if not new_stem:
+            st.error("Please enter a valid name.")
+            return None
+        old_path = CHATS_DIR / f"{old_stem}.txt"
+        if not old_path.exists():
+            st.error("Original file not found.")
+            return None
+        # Avoid unnecessary rename if names are the same
+        if new_stem == old_stem:
+            return old_stem
+        new_path = _unique_path(new_stem)
+        try:
+            old_path.rename(new_path)
+            return new_path.stem
+        except Exception as e:
+            st.error(f"Error renaming chat: {e}")
+            return None
+
+    @staticmethod
+    def delete_chat(stem: str) -> bool:
+        """Delete a chat file. Returns True on success."""
+        file_path = CHATS_DIR / f"{stem}.txt"
+        try:
+            file_path.unlink(missing_ok=True)
+            return True
+        except Exception as e:
+            st.error(f"Error deleting chat: {e}")
+            return False
+
 
 # ── ENV UI ────────────────────────────────────────────────────────────────────
 
@@ -395,7 +405,7 @@ def update_env() -> None:
     if "show_form" not in st.session_state:
         st.session_state.show_form = False
 
-    if st.button("Add / Update Credentials"):
+    if st.button("Add Credentials"):
         st.session_state.show_form = True
 
     if st.session_state.show_form:
@@ -405,10 +415,41 @@ def update_env() -> None:
                 if api:
                     Path(ENV_FILE).touch()
                     set_key(ENV_FILE, "GROQ_API_KEY", api)
-                    st.success("Credentials saved. Restart the app to apply.")
+                    os.environ["GROQ_API_KEY"] = api   # apply immediately, no restart needed
+                    st.success("Credentials saved.")
                     st.session_state.show_form = False
                 else:
                     st.error("Please enter a non-empty API key.")
+
+
+# ── Chat management sidebar panel ─────────────────────────────────────────────
+
+def render_chat_actions(summarizer: "YouTubeSummarizer", stem: str) -> None:
+    """Render rename and delete controls in the sidebar for the selected chat."""
+    st.sidebar.markdown("---")
+
+    # ── Rename ──────────────────────────────────────────────────────────────
+    with st.sidebar.expander("✏️ Rename"):
+        display_name = stem.replace("_", " ").title()
+        new_name = st.text_input(
+            "New name",
+            value=display_name,
+            key="rename_input",
+            label_visibility="collapsed",
+        )
+        if st.button("Rename", key="rename_btn", use_container_width=True):
+            new_stem = summarizer.rename_chat(stem, new_name)
+            if new_stem:
+                st.session_state.selected_chat = new_stem
+                st.rerun()
+
+    # ── Delete ──────────────────────────────────────────────────────────────
+    with st.sidebar.expander("🗑️ Delete"):
+        st.warning(f'Delete **"{stem.replace("_", " ").title()}"**? This cannot be undone.')
+        if st.button("Delete", key="delete_btn", type="primary", use_container_width=True):
+            if summarizer.delete_chat(stem):
+                st.session_state.selected_chat = None
+                st.rerun()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -416,8 +457,18 @@ def update_env() -> None:
 def main() -> None:
     summarizer = YouTubeSummarizer()
 
+    # selected_chat persists across reruns so a newly saved chat is shown immediately
+    if "selected_chat" not in st.session_state:
+        st.session_state.selected_chat = None
+
     chat_list = summarizer.get_chat_list()
     chat_options = ["New Chat"] + chat_list
+
+    # Determine the default index for option_menu based on session state
+    if st.session_state.selected_chat and st.session_state.selected_chat in chat_list:
+        default_idx = chat_options.index(st.session_state.selected_chat)
+    else:
+        default_idx = 0
 
     with st.sidebar:
         selected = option_menu(
@@ -425,12 +476,20 @@ def main() -> None:
             chat_options,
             icons=["plus"] + ["chat-text"] * len(chat_list),
             menu_icon="collection",
+            default_index=default_idx,
+            key="sidebar_menu",
         )
 
+    # Keep session state in sync with whatever the user clicked
+    st.session_state.selected_chat = selected if selected != "New Chat" else None
+
+    # ── Viewing an existing chat ───────────────────────────────────────────
     if selected != "New Chat":
         summarizer.display_chat(selected)
+        render_chat_actions(summarizer, selected)
         return
 
+    # ── New chat page ──────────────────────────────────────────────────────
     st.title("📺 YouTube Video Summarizer")
     st.markdown("Summarise any YouTube video using AI — paste a URL and go.")
 
@@ -460,7 +519,12 @@ def main() -> None:
 
             if summary:
                 st.markdown(summary)
-                summarizer.save_chat(summary, youtube_url)
+
+                saved_stem = summarizer.save_chat(summary, youtube_url)
+                if saved_stem:
+                    # Switch to the new chat so it appears selected in the sidebar
+                    st.session_state.selected_chat = saved_stem
+                    st.rerun()
 
 
 if __name__ == "__main__":
